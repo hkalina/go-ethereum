@@ -386,6 +386,12 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 
 // runMethod runs the Go callback for an RPC method.
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
+	// set timeout for websocket connections
+	if _, ok := h.conn.(*websocketCodec); ok {
+		tctx, cancel := context.WithTimeout(ctx, wsExecutionTimeLimit)
+		ctx = tctx
+		defer cancel()
+	}
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
 		return msg.errorResponse(err)

@@ -20,6 +20,7 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rpc"
 	"io"
 	"io/ioutil"
 	"math"
@@ -597,6 +598,11 @@ var (
 		Usage: "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value: "",
 	}
+	WSExecutionTimeLimit = cli.DurationFlag{
+		Name:  "ws.execlimit",
+		Usage: "Time interval for calls execution.",
+		Value: time.Minute * 5,
+	}
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
 		Usage: "Execute JavaScript statement",
@@ -1009,6 +1015,10 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(WSPathPrefixFlag.Name) {
 		cfg.WSPathPrefix = ctx.GlobalString(WSPathPrefixFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(WSExecutionTimeLimit.Name) {
+		rpc.SetWsExecutionTimeLimit(ctx.GlobalDuration(WSExecutionTimeLimit.Name))
 	}
 }
 

@@ -40,7 +40,15 @@ const (
 	wsMessageSizeLimit = 15 * 1024 * 1024
 )
 
-var wsBufferPool = new(sync.Pool)
+var (
+	wsBufferPool         = new(sync.Pool)
+	wsExecutionTimeLimit = 5 * time.Minute
+)
+
+// SetWsExecutionTimeLimit sets execution limit for websocket calls
+func SetWsExecutionTimeLimit(limit time.Duration) {
+	wsExecutionTimeLimit = limit
+}
 
 // WebsocketHandler returns a handler that serves JSON-RPC to WebSocket connections.
 //
