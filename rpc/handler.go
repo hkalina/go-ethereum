@@ -28,6 +28,13 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var rpcExecutionTimeLimit = 5 * time.Minute
+
+// SetRPCExecutionTimeLimit sets execution limit for websocket calls
+func SetRPCExecutionTimeLimit(limit time.Duration) {
+	rpcExecutionTimeLimit = limit
+}
+
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
 // handler is not safe for concurrent use. Message handling never blocks indefinitely
 // because RPCs are processed on background goroutines launched by handler.
@@ -386,9 +393,12 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 
 // runMethod runs the Go callback for an RPC method.
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
-	// set timeout for websocket connections
-	if _, ok := h.conn.(*websocketCodec); ok {
-		tctx, cancel := context.WithTimeout(ctx, wsExecutionTimeLimit)
+	jc, ok := h.conn.(*jsonCodec)
+	// set timeout connections other than UnixConn (IPC)
+	// http and websocket requests have timeout based on rpcExecutionTimeLimit
+	// IPC is always without timeout
+	if ok && !jc.isUnixConn() {
+		tctx, cancel := context.WithTimeout(ctx, rpcExecutionTimeLimit)
 		ctx = tctx
 		defer cancel()
 	}

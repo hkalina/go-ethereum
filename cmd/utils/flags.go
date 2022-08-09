@@ -598,8 +598,8 @@ var (
 		Usage: "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value: "",
 	}
-	WSExecutionTimeLimit = cli.DurationFlag{
-		Name:  "ws.execlimit",
+	RPCExecutionTimeLimit = cli.DurationFlag{
+		Name:  "rpc.execlimit",
 		Usage: "Time interval for calls execution.",
 		Value: time.Minute * 5,
 	}
@@ -1017,8 +1017,8 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 		cfg.WSPathPrefix = ctx.GlobalString(WSPathPrefixFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(WSExecutionTimeLimit.Name) {
-		rpc.SetWsExecutionTimeLimit(ctx.GlobalDuration(WSExecutionTimeLimit.Name))
+	if ctx.GlobalIsSet(RPCExecutionTimeLimit.Name) {
+		rpc.SetRPCExecutionTimeLimit(ctx.GlobalDuration(RPCExecutionTimeLimit.Name))
 	}
 }
 
