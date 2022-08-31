@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"reflect"
 	"strings"
 	"sync"
@@ -197,11 +196,6 @@ func NewCodec(conn Conn) ServerCodec {
 	dec := json.NewDecoder(conn)
 	dec.UseNumber()
 	return NewFuncCodec(conn, enc.Encode, dec.Decode)
-}
-
-func (c *jsonCodec) isUnixConn() bool {
-	_, ok := c.conn.(*net.UnixConn)
-	return ok
 }
 
 func (c *jsonCodec) remoteAddr() string {

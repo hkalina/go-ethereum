@@ -555,6 +555,11 @@ var (
 		Usage: "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value: "",
 	}
+	HTTPExecutionTimeLimit = cli.DurationFlag{
+		Name:  "http.execlimit",
+		Usage: "Time interval for http calls execution.",
+		Value: time.Minute * 5,
+	}
 	GraphQLEnabledFlag = cli.BoolFlag{
 		Name:  "graphql",
 		Usage: "Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.",
@@ -598,9 +603,9 @@ var (
 		Usage: "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value: "",
 	}
-	RPCExecutionTimeLimit = cli.DurationFlag{
-		Name:  "rpc.execlimit",
-		Usage: "Time interval for calls execution.",
+	WSExecutionTimeLimit = cli.DurationFlag{
+		Name:  "ws.execlimit",
+		Usage: "Time interval for ws calls execution.",
 		Value: time.Minute * 5,
 	}
 	ExecFlag = cli.StringFlag{
@@ -979,6 +984,9 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(AllowUnprotectedTxs.Name) {
 		cfg.AllowUnprotectedTxs = ctx.GlobalBool(AllowUnprotectedTxs.Name)
 	}
+	if ctx.GlobalIsSet(HTTPExecutionTimeLimit.Name) {
+		rpc.SetHTTPExecutionTimeLimit(ctx.GlobalDuration(HTTPExecutionTimeLimit.Name))
+	}
 }
 
 // setGraphQL creates the GraphQL listener interface string from the set
@@ -1017,8 +1025,8 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 		cfg.WSPathPrefix = ctx.GlobalString(WSPathPrefixFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(RPCExecutionTimeLimit.Name) {
-		rpc.SetRPCExecutionTimeLimit(ctx.GlobalDuration(RPCExecutionTimeLimit.Name))
+	if ctx.GlobalIsSet(WSExecutionTimeLimit.Name) {
+		rpc.SetWSExecutionTimeLimit(ctx.GlobalDuration(WSExecutionTimeLimit.Name))
 	}
 }
 

@@ -28,11 +28,17 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var rpcExecutionTimeLimit = 5 * time.Minute
+var wsExecutionTimeLimit = 5 * time.Minute
+var httpExecutionTimeLimit = 5 * time.Minute
 
-// SetRPCExecutionTimeLimit sets execution limit for websocket calls
-func SetRPCExecutionTimeLimit(limit time.Duration) {
-	rpcExecutionTimeLimit = limit
+// SetWSExecutionTimeLimit sets execution limit for websocket calls
+func SetWSExecutionTimeLimit(limit time.Duration) {
+	wsExecutionTimeLimit = limit
+}
+
+// SetHTTPExecutionTimeLimit sets execution limit for http calls
+func SetHTTPExecutionTimeLimit(limit time.Duration) {
+	httpExecutionTimeLimit = limit
 }
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
@@ -69,8 +75,9 @@ type handler struct {
 	log            log.Logger
 	allowSubscribe bool
 
-	subLock    sync.Mutex
-	serverSubs map[ID]*Subscription
+	subLock              sync.Mutex
+	serverSubs           map[ID]*Subscription
+	getSingleProcContext func() (context.Context, context.CancelFunc)
 }
 
 type callProc struct {
@@ -80,17 +87,37 @@ type callProc struct {
 
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
+
+	var getContextFunction = func() (context.Context, context.CancelFunc) {
+		return rootCtx, cancelRoot
+	}
+
+	switch v := conn.(type) {
+	case *jsonCodec:
+		_, ok := v.conn.(*httpServerConn)
+		if ok {
+			getContextFunction = func() (context.Context, context.CancelFunc) {
+				return context.WithTimeout(rootCtx, httpExecutionTimeLimit)
+			}
+		}
+	case *websocketCodec:
+		getContextFunction = func() (context.Context, context.CancelFunc) {
+			return context.WithTimeout(rootCtx, wsExecutionTimeLimit)
+		}
+	}
+
 	h := &handler{
-		reg:            reg,
-		idgen:          idgen,
-		conn:           conn,
-		respWait:       make(map[string]*requestOp),
-		clientSubs:     make(map[string]*ClientSubscription),
-		rootCtx:        rootCtx,
-		cancelRoot:     cancelRoot,
-		allowSubscribe: true,
-		serverSubs:     make(map[ID]*Subscription),
-		log:            log.Root(),
+		reg:        reg,
+		idgen:      idgen,
+		conn:       conn,
+		respWait:   make(map[string]*requestOp),
+		clientSubs: make(map[string]*ClientSubscription),
+		//rootCtx:            rootCtx,
+		cancelRoot:           cancelRoot,
+		allowSubscribe:       true,
+		serverSubs:           make(map[ID]*Subscription),
+		log:                  log.Root(),
+		getSingleProcContext: getContextFunction,
 	}
 	if conn.remoteAddr() != "" {
 		h.log = h.log.New("conn", conn.remoteAddr())
@@ -227,7 +254,7 @@ func (h *handler) cancelServerSubscriptions(err error) {
 func (h *handler) startCallProc(fn func(*callProc)) {
 	h.callWG.Add(1)
 	go func() {
-		ctx, cancel := context.WithCancel(h.rootCtx)
+		ctx, cancel := h.getSingleProcContext()
 		defer h.callWG.Done()
 		defer cancel()
 		fn(&callProc{ctx: ctx})
@@ -393,15 +420,6 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 
 // runMethod runs the Go callback for an RPC method.
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
-	jc, ok := h.conn.(*jsonCodec)
-	// set timeout connections other than UnixConn (IPC)
-	// http and websocket requests have timeout based on rpcExecutionTimeLimit
-	// IPC is always without timeout
-	if ok && !jc.isUnixConn() {
-		tctx, cancel := context.WithTimeout(ctx, rpcExecutionTimeLimit)
-		ctx = tctx
-		defer cancel()
-	}
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
 		return msg.errorResponse(err)
