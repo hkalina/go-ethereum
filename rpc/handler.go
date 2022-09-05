@@ -75,9 +75,8 @@ type handler struct {
 	log            log.Logger
 	allowSubscribe bool
 
-	subLock              sync.Mutex
-	serverSubs           map[ID]*Subscription
-	getSingleProcContext func() (context.Context, context.CancelFunc)
+	subLock    sync.Mutex
+	serverSubs map[ID]*Subscription
 }
 
 type callProc struct {
@@ -88,36 +87,17 @@ type callProc struct {
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 
-	var getContextFunction = func() (context.Context, context.CancelFunc) {
-		return rootCtx, cancelRoot
-	}
-
-	switch v := conn.(type) {
-	case *jsonCodec:
-		_, ok := v.conn.(*httpServerConn)
-		if ok {
-			getContextFunction = func() (context.Context, context.CancelFunc) {
-				return context.WithTimeout(rootCtx, httpExecutionTimeLimit)
-			}
-		}
-	case *websocketCodec:
-		getContextFunction = func() (context.Context, context.CancelFunc) {
-			return context.WithTimeout(rootCtx, wsExecutionTimeLimit)
-		}
-	}
-
 	h := &handler{
-		reg:        reg,
-		idgen:      idgen,
-		conn:       conn,
-		respWait:   make(map[string]*requestOp),
-		clientSubs: make(map[string]*ClientSubscription),
-		//rootCtx:            rootCtx,
-		cancelRoot:           cancelRoot,
-		allowSubscribe:       true,
-		serverSubs:           make(map[ID]*Subscription),
-		log:                  log.Root(),
-		getSingleProcContext: getContextFunction,
+		reg:            reg,
+		idgen:          idgen,
+		conn:           conn,
+		respWait:       make(map[string]*requestOp),
+		clientSubs:     make(map[string]*ClientSubscription),
+		rootCtx:        rootCtx,
+		cancelRoot:     cancelRoot,
+		allowSubscribe: true,
+		serverSubs:     make(map[ID]*Subscription),
+		log:            log.Root(),
 	}
 	if conn.remoteAddr() != "" {
 		h.log = h.log.New("conn", conn.remoteAddr())
@@ -254,11 +234,26 @@ func (h *handler) cancelServerSubscriptions(err error) {
 func (h *handler) startCallProc(fn func(*callProc)) {
 	h.callWG.Add(1)
 	go func() {
-		ctx, cancel := h.getSingleProcContext()
+		ctx, cancel := singleProcContext(h)
 		defer h.callWG.Done()
 		defer cancel()
 		fn(&callProc{ctx: ctx})
 	}()
+}
+
+// singleProcContext returns context for single call procedure.
+func singleProcContext(h *handler) (context.Context, context.CancelFunc) {
+	switch v := h.conn.(type) {
+	case *jsonCodec:
+		_, ok := v.conn.(*httpServerConn)
+		if ok {
+			return context.WithTimeout(h.rootCtx, httpExecutionTimeLimit)
+		}
+	case *websocketCodec:
+		return context.WithTimeout(h.rootCtx, wsExecutionTimeLimit)
+	}
+
+	return h.rootCtx, h.cancelRoot
 }
 
 // handleImmediate executes non-call messages. It returns false if the message is a
