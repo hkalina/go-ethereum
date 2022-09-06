@@ -557,7 +557,7 @@ var (
 	}
 	HTTPExecutionTimeLimit = cli.DurationFlag{
 		Name:  "http.execlimit",
-		Usage: "Time interval for http calls execution.",
+		Usage: "Time limit for RPC calls execution.",
 		Value: time.Minute * 5,
 	}
 	GraphQLEnabledFlag = cli.BoolFlag{
@@ -605,7 +605,7 @@ var (
 	}
 	WSExecutionTimeLimit = cli.DurationFlag{
 		Name:  "ws.execlimit",
-		Usage: "Time interval for ws calls execution.",
+		Usage: "Time limit for RPC calls execution.",
 		Value: time.Minute * 5,
 	}
 	ExecFlag = cli.StringFlag{
