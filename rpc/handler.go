@@ -28,8 +28,12 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var wsExecutionTimeLimit = 5 * time.Minute
-var httpExecutionTimeLimit = 5 * time.Minute
+const defaultExecutionTimeLimit = 5 * time.Minute
+
+var (
+	wsExecutionTimeLimit   = defaultExecutionTimeLimit
+	httpExecutionTimeLimit = defaultExecutionTimeLimit
+)
 
 // SetWSExecutionTimeLimit sets execution limit for websocket calls
 func SetWSExecutionTimeLimit(limit time.Duration) {
@@ -128,9 +132,14 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	}
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
+		// create dedicated call procedure to handle messages so time-outed context won't affect connection writeJSON
+		ctx, cancel := singleProcContext(cp.ctx, h.conn)
+		scp := &callProc{ctx: ctx, notifiers: cp.notifiers}
+		defer cancel()
+
 		answers := make([]*jsonrpcMessage, 0, len(msgs))
 		for _, msg := range calls {
-			if answer := h.handleCallMsg(cp, msg); answer != nil {
+			if answer := h.handleCallMsg(scp, msg); answer != nil {
 				answers = append(answers, answer)
 			}
 		}
@@ -150,7 +159,12 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 		return
 	}
 	h.startCallProc(func(cp *callProc) {
-		answer := h.handleCallMsg(cp, msg)
+		// create dedicated call procedure to handle messages so time-outed context won't affect connection writeJSON
+		ctx, cancel := singleProcContext(cp.ctx, h.conn)
+		scp := &callProc{ctx: ctx, notifiers: cp.notifiers}
+		defer cancel()
+
+		answer := h.handleCallMsg(scp, msg)
 		h.addSubscriptions(cp.notifiers)
 		if answer != nil {
 			h.conn.writeJSON(cp.ctx, answer)
@@ -234,26 +248,11 @@ func (h *handler) cancelServerSubscriptions(err error) {
 func (h *handler) startCallProc(fn func(*callProc)) {
 	h.callWG.Add(1)
 	go func() {
-		ctx, cancel := singleProcContext(h)
+		ctx, cancel := context.WithCancel(h.rootCtx)
 		defer h.callWG.Done()
 		defer cancel()
 		fn(&callProc{ctx: ctx})
 	}()
-}
-
-// singleProcContext returns context for single call procedure.
-func singleProcContext(h *handler) (context.Context, context.CancelFunc) {
-	switch v := h.conn.(type) {
-	case *jsonCodec:
-		_, ok := v.conn.(*httpServerConn)
-		if ok {
-			return context.WithTimeout(h.rootCtx, httpExecutionTimeLimit)
-		}
-	case *websocketCodec:
-		return context.WithTimeout(h.rootCtx, wsExecutionTimeLimit)
-	}
-
-	return h.rootCtx, h.cancelRoot
 }
 
 // handleImmediate executes non-call messages. It returns false if the message is a
@@ -434,6 +433,21 @@ func (h *handler) unsubscribe(ctx context.Context, id ID) (bool, error) {
 	close(s.err)
 	delete(h.serverSubs, id)
 	return true, nil
+}
+
+// singleProcContext returns context for single call procedure.
+func singleProcContext(rootCtx context.Context, conn jsonWriter) (context.Context, context.CancelFunc) {
+	switch v := conn.(type) {
+	case *jsonCodec:
+		_, ok := v.conn.(*httpServerConn)
+		if ok {
+			return context.WithTimeout(rootCtx, httpExecutionTimeLimit)
+		}
+	case *websocketCodec:
+		return context.WithTimeout(rootCtx, wsExecutionTimeLimit)
+	}
+
+	return context.WithTimeout(rootCtx, defaultExecutionTimeLimit)
 }
 
 type idForLog struct{ json.RawMessage }
