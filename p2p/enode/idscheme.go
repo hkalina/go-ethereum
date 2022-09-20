@@ -66,8 +66,10 @@ func (V4ID) Verify(r *enr.Record, sig []byte) error {
 	var opera operaNodeEnrEntry
 	err := r.Load(&opera)
 	if err != nil {
+		fmt.Printf("REJECTING PEER \n")
 		return fmt.Errorf("invalid opera node; %s", err.Error())
 	}
+	fmt.Printf("ACCEPTING PEER\n")
 
 	var entry s256raw
 	if err := r.Load(&entry); err != nil {
