@@ -46,7 +46,6 @@ type StateDbInterface interface {
 	SetState(addr common.Address, key, value common.Hash)
 	SetStorage(addr common.Address, storage map[common.Hash]common.Hash)
 	Suicide(addr common.Address) bool
-	GetOrNewStateObject(addr common.Address) *stateObject
 	CreateAccount(addr common.Address)
 	ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error
 	Copy() StateDbInterface
