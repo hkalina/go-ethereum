@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-var stateDbFactory = NewLegacyWithSnapLayers
-
 type StateDbInterface interface {
 	StartPrefetcher(namespace string)
 	StopPrefetcher()
@@ -124,13 +122,13 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 }
 
 func NewWithSnapLayers(root common.Hash, db Database, snaps *snapshot.Tree, layers int) (*StateDB, error) {
-	sdb, err := stateDbFactory(root, db, snaps, layers)
+	sdb, err := NewLegacyWithSnapLayers(root, db, snaps, layers)
 	if err != nil {
 		return nil, err
 	}
-	return &StateDB{ sdb, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, nil
+	return NewWrapper(sdb), nil
 }
 
-func SetFactory(factory func(root common.Hash, db Database, snaps *snapshot.Tree, layers int) (StateDbInterface, error)) {
-	stateDbFactory = factory
+func NewWrapper(inner StateDbInterface) *StateDB {
+	return &StateDB{ inner, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 }
