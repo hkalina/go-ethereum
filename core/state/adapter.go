@@ -77,6 +77,8 @@ type StateDbInterface interface {
 	GetSnapshotAccountReads() time.Duration
 	GetSnapshotStorageReads() time.Duration
 	GetSnapshotCommits() time.Duration
+
+	EndBlock(number uint64)
 }
 
 type StateDB struct {
