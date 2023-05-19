@@ -1030,6 +1030,10 @@ func (s *LegacyStateDB) SlotInAccessList(addr common.Address, slot common.Hash) 
 	return s.accessList.Contains(addr, slot)
 }
 
+func (s *LegacyStateDB) BeginBlock(number uint64) {
+	// not used by LegacyStateDB
+}
+
 func (s *LegacyStateDB) EndBlock(number uint64) {
 	// not used by LegacyStateDB
 }

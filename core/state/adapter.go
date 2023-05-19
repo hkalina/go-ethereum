@@ -78,6 +78,7 @@ type StateDbInterface interface {
 	GetSnapshotStorageReads() time.Duration
 	GetSnapshotCommits() time.Duration
 
+	BeginBlock(number uint64)
 	EndBlock(number uint64)
 }
 
